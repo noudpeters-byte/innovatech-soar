@@ -1,0 +1,13 @@
+rules:
+  - name: R1_failed_login_burst
+    match: { type: auth_fail }
+    min_count: 5
+    actions: [notify, log_incident, store_incident]
+  - name: R2_malware_high
+    match: { type: malware, severity: high }
+    actions: [notify, log_incident, store_incident]
+  - name: R3_low_severity
+    match: { severity: low }
+    actions: [log_incident]
+
+default_actions: [log_unhandled]
