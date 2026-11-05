@@ -1,5 +1,5 @@
 locals {
-  interface_services = ["ssm", "ssmmessages", "ec2messages", "sns", "secretsmanager"]
+  interface_services = ["ssm", "ssmmessages", "ec2messages", "sns", "secretsmanager", "logs", "monitoring"]
 }
 
 # Interface endpoints: AWS APIs reached privately, no NAT needed

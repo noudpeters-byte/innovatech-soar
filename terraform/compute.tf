@@ -67,38 +67,52 @@ resource "aws_launch_template" "soar" {
   # Runs once at first boot: installs tools, pulls the code from S3,
   # and starts the listener as a service that restarts on failure.
   user_data = base64encode(<<-EOF
-    #!/bin/bash
-    set -e
-    dnf install -y python3-pyyaml python3-boto3 python3-psycopg2
-    mkdir -p /opt/soar /var/log/soar
-    aws s3 sync s3://${aws_s3_bucket.code.bucket}/ /opt/soar/ --region ${var.region}
+       #!/bin/bash
+       set -e
+       dnf install -y python3-pyyaml python3-boto3 python3-psycopg2 rsyslog amazon-cloudwatch-agent
+       systemctl enable --now rsyslog
+       mkdir -p /opt/soar /var/log/soar
+       aws s3 sync s3://${aws_s3_bucket.code.bucket}/ /opt/soar/ --region ${var.region}
 
-    cat > /etc/soar.env <<ENV
-    AWS_REGION=${var.region}
-    SNS_TOPIC_ARN=${aws_sns_topic.alerts.arn}
-    SECRET_ID=${aws_secretsmanager_secret.db.name}
-    INCIDENT_LOG=/var/log/soar/incidents.jsonl
-    ENV
+       cat > /etc/soar.env <<ENV
+       AWS_REGION=${var.region}
+       SNS_TOPIC_ARN=${aws_sns_topic.alerts.arn}
+       SECRET_ID=${aws_secretsmanager_secret.db.name}
+       INCIDENT_LOG=/var/log/soar/incidents.jsonl
+       ENV
 
-    cat > /etc/systemd/system/soar-listener.service <<UNIT
-    [Unit]
-    Description=SOAR syslog listener
-    After=network-online.target
+       cat > /etc/systemd/system/soar-listener.service <<UNIT
+       [Unit]
+       Description=SOAR syslog listener
+       After=network-online.target
 
-    [Service]
-    EnvironmentFile=/etc/soar.env
-    WorkingDirectory=/opt/soar
-    ExecStart=/usr/bin/python3 /opt/soar/listener.py
-    Restart=always
+       [Service]
+       EnvironmentFile=/etc/soar.env
+       WorkingDirectory=/opt/soar
+       ExecStart=/usr/bin/python3 /opt/soar/listener.py
+       StandardOutput=append:/var/log/soar/listener.log
+       StandardError=append:/var/log/soar/listener.log
+       Restart=always
 
-    [Install]
-    WantedBy=multi-user.target
-    UNIT
+       [Install]
+       WantedBy=multi-user.target
+       UNIT
 
-    systemctl daemon-reload
-    systemctl enable --now soar-listener
-  EOF
+       cat > /opt/aws/amazon-cloudwatch-agent/etc/config.json <<CW
+       {
+         "logs": { "logs_collected": { "files": { "collect_list": [
+           { "file_path": "/var/log/soar/listener.log", "log_group_name": "/soar/listener", "log_stream_name": "{instance_id}" },
+           { "file_path": "/var/log/secure", "log_group_name": "/soar/os-secure", "log_stream_name": "{instance_id}" }
+         ] } } }
+       }
+       CW
+       /opt/aws/amazon-cloudwatch-agent/bin/amazon-cloudwatch-agent-ctl -a fetch-config -m ec2 -c file:/opt/aws/amazon-cloudwatch-agent/etc/config.json -s
+
+       systemctl daemon-reload
+       systemctl enable --now soar-listener
+     EOF
   )
+
 
   tag_specifications {
     resource_type = "instance"
@@ -113,6 +127,8 @@ resource "aws_autoscaling_group" "soar" {
   desired_capacity    = 2
   vpc_zone_identifier = [aws_subnet.app_a.id, aws_subnet.app_b.id]
   health_check_type   = "EC2"
+  metrics_granularity = "1Minute"
+  enabled_metrics     = ["GroupDesiredCapacity", "GroupInServiceInstances"]
 
   launch_template {
     id      = aws_launch_template.soar.id
@@ -125,7 +141,6 @@ resource "aws_autoscaling_group" "soar" {
     propagate_at_launch = true
   }
 
-  # Nodes boot only when everything they depend on exists
   depends_on = [
     aws_vpc_endpoint.interface,
     aws_vpc_endpoint.s3,
