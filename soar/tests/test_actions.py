@@ -18,5 +18,5 @@ def test_notify_skipped_without_topic(monkeypatch):
 
 def test_run_actions_records_failure(monkeypatch):
     monkeypatch.setattr(actions, "SNS_TOPIC_ARN", "")
-    results = actions.run_actions({"type": "x"}, "R1", ["notify", "bogus"])
-    assert results == [("notify", False), ("bogus", False)]
+    results = actions.run_actions({"type": "x"}, "R1", ["notify", "random"])
+    assert results == [("notify", False), ("random", False)]
