@@ -34,3 +34,7 @@ jobs:
       - name: Plan
         working-directory: terraform
         run: terraform plan -no-color -input=false -out=tfplan
+      - name: Apply
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        working-directory: terraform
+        run: terraform apply -auto-approve -input=false tfplan
