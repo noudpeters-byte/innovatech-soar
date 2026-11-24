@@ -64,8 +64,7 @@ resource "aws_launch_template" "soar" {
     http_tokens = "required"
   }
 
-  # Runs once at first boot: installs tools, pulls the code from S3,
-  # and starts the listener as a service that restarts on failure.
+  
   user_data = base64encode(<<-EOF
        #!/bin/bash
        set -e

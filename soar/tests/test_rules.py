@@ -17,4 +17,4 @@ def test_r3_low_severity():
 
 def test_default_when_no_match():
     e = {"type": "other", "severity": "medium", "count": 1}
-    assert match_rule(e, RULES)["name"] == "default"
+    assert match_rule(e, RULES)["name"] == "default"    
